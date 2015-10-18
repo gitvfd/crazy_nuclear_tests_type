@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+body{background-color: #000;}
+
+h1 {
+  position: absolute;
+  top: 280px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  text-align: center;
+  width: 960px;
+}
+    .graticule {
+      fill: none;
+      stroke: none;
+      stroke-width: .5px;
+      stroke-opacity: .5;
+    }
+
+    .land {
+      fill: #deeaf1;
+      opacity: 0.2;
+    }
+
+    .boundary {
+      fill: none;
+      stroke: LightSteelBlue;
+      stroke-width: .5px;
+      stroke-opacity: .2;
+    }
+    .text {
+      font: 100 20px "Helvetica Neue";
+      fill: #fff;
+    }
+
+</style>
+<div id="chart"></div>
+<!--<script src="js/3.5.5/d3.min.js"></script>
+<script src="js/queue.min.js"></script>
+<script src="js/topojson.min.js"></script>
+<script src="js/d3.geo.projection.min.js"></script>-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/queue-async/1.0.7/queue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-geo-projection/0.2.15/d3.geo.projection.min.js"></script>
+    <script type="text/javascript">
+      var width = 900;
+      var height = 600;    
+	    chart = d3.select("#chart").append("svg")
+	               .attr("width", width)
+	               .attr("height", height);
+
+  		var color=d3.scale.ordinal()
+  			.domain(["Atmospheric","Underground","Underwater"])
+  			.range(["DeepSkyBlue","Chocolate","Aquamarine"]);
+
+      var radius = d3.scale.linear().range([0,5]);
+
+      var padding=1;
+
+      d3.tsv("data/Nuclear_test_type.tsv", function(error,data){
+
+            var nodes=data.map(function(d) {
+              return {
+              	type: d.sourceType,
+                radius: radius(Math.sqrt(d.n/Math.PI)),
+                color: color(d.sourceType),
+                test:d.n
+              }
+            });
+            
+            var force = d3.layout.force()
+              .nodes(nodes)
+              .size([width, height])
+              .gravity(.05)
+              .charge(7)
+              .on("tick", tick)
+              .start();
+
+            var circle = chart.selectAll("a.node")
+              .data(nodes)
+              .enter().append("a")
+              .attr("class","nodes")
+              .call(force.drag);
+
+
+            circle.append("circle")
+              .attr("r", function(d) { return d.radius; })
+              .style("stroke", function(d) { return d.color; })
+              .style("fill", function(d) { return d.color; });
+
+
+            circle.append("text")
+              .attr("class","text")
+              .text(function(d) { return d.type; })
+              .attr("x", function(d) {return d.radius})
+              //.attr("y", function(d) {return d.radius});
+
+            circle.append("text")
+              .attr("class","text")
+              .text(function(d) { return d.test + " tests"; })
+              .attr("x", function(d) {return d.radius})
+              .attr("y", 20)
+              //.attr("y", function(d) {return d.radius});
+
+	          function tick(e) {
+              circle
+                .each(cluster(10 * e.alpha * e.alpha))
+                .each(collide(.5))
+                .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+
+            }
+
+            // Move d to be adjacent to the cluster node.
+            function cluster(alpha) {
+              var max = {};
+
+              // Find the largest node for each cluster.
+              nodes.forEach(function(d) {
+                if (!(d.color in max) || (d.radius > max[d.color].radius)) {
+                  max[d.color] = d;
+                }
+              });
+
+              return function(d) {
+                var node = max[d.color],
+                  l,
+                  r,
+                  x,
+                  y,
+                  i = -1;
+
+                if (node == d) return;
+                x = d.x - node.x;
+                y = d.y - node.y;
+                l = Math.sqrt(x * x + y * y);
+                r = d.radius + node.radius;
+                if (l != r) {
+                  l = (l - r) / l * alpha;
+                  d.x -= x *= l;
+                  d.y -= y *= l;
+                  node.x += x;
+                  node.y += y;
+                }
+              };
+            }
+            
+            function collide(alpha) {
+              var quadtree = d3.geom.quadtree(nodes);
+              return function(d) {
+                var r = d.radius + radius.domain()[1] + padding,
+                  nx1 = d.x - r,
+                  nx2 = d.x + r,
+                  ny1 = d.y - r,
+                  ny2 = d.y + r;
+                quadtree.visit(function(quad, x1, y1, x2, y2) {
+                  if (quad.point && (quad.point !== d)) {
+                    var x = d.x - quad.point.x,
+                        y = d.y - quad.point.y,
+                        l = Math.sqrt(x * x + y * y),
+                        r = d.radius + quad.point.radius + (d.color !== quad.point.color) * padding;
+                    if (l < r) {
+                        l = (l - r) / l * alpha;
+                        d.x -= x *= l;
+                        d.y -= y *= l;
+                        quad.point.x += x;
+                        quad.point.y += y;
+                    }
+                  }
+                  return x1 > nx2
+                      || x2 < nx1
+                      || y1 > ny2
+                      || y2 < ny1;
+                });
+              };
+            }
+
+        });
+      </script>
